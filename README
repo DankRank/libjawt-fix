@@ -1,0 +1,30 @@
+You try to run an LWJGL2 app (e.g. Minecraft 1.12 or earlier) with Java 11+ on Linux.
+
+The following error occurs:
+	Inconsistency detected by ld.so: dl-lookup.c: 111: check_match: Assertion `version->filename == NULL || ! _dl_name_match_p (version->filename, map)' failed!
+Or perhaps this one, if you use a different distro:
+	Inconsistency detected by ld.so: dl-lookup.c: 105: check_match: Assertion `version->filename == NULL || ! _dl_name_match_p (version->filename, map)' failed!
+(This error message is a prime example of why assert(3) can't replace proper error reporting, btw)
+
+So, what happened?
+After a lot of googling and some LD_DEBUG'ing, I ended up here:
+https://mail.openjdk.java.net/pipermail/jdk-dev/2020-February/003890.html
+https://bugs.openjdk.org/browse/JDK-8200178
+
+In Java 11 they decided to remove mapfiles, and replace them with visibility attributes.
+However, mapfiles also specify symbol versioning, and they just ignored that aspect of it.
+The result is that the ABI was broken for literally no reason.
+In this particular case, the JAWT_GetAWT@@SUNWprivate_1.1 symbol became JAWT_GetAWT.
+
+So, how to fix it? There are quite a few options:
+- install java 8
+- build your own java 11+ with a custom patch
+- build your own lwjgl 2 natives (liblwjgl64.so) and link to java 11+
+- somehow patch one of the shared objects to match the other
+- build your own dynamic linker with a special case for this symbol
+- use the LD_PRELOAD hack contained in this repo
+
+Build:
+	$ make
+Use:
+	$ LD_PRELOAD=path/to/jawtfix.so java <args>
